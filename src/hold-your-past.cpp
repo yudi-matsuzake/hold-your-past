@@ -1,8 +1,14 @@
+/** @file hold-yout-past.cpp
+  * @brief the file that has the main function.
+  */
 #include <iostream>
 #include <sstream>
+#include <algorithm>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+
+#include "line2d.h"
 
 #define WINDOW_TITLE		"Frame original"
 #define WINDOW_TITLE_PROCESSED	"Frame processado"
@@ -38,9 +44,10 @@ public:
   PROTÓTIPOS
   ---------------------------------*/
 Mat	best_green ( const Mat& frame );
-void 	get_points ( const Mat& binary_frame, vector<Quadrilateral>& vec );
+void 	approxQuadrilateral ( vector<Point>& curve, Quadrilateral& q );
+void 	get_points ( Mat& binary_frame, Mat& frame, vector<Quadrilateral>& vec );
 void 	draw_point ( Mat& img, vector<Quadrilateral>& vec );
-void 	draw_point ( Mat& img, vector<Point>& vec );
+void 	draw_point ( Mat& img, vector<Point>& vec, Scalar s = Scalar(255,0,255));
 void 	sort_point ( vector<Quadrilateral>& vec, vector<Point>& cent );
 void 	mask ( const Mat& src, Mat &dst, const Mat& mask );
 
@@ -78,14 +85,16 @@ Mat pipeline( const Mat& frame ){
 	//namedWindow("greens", CV_WINDOW_NORMAL);
 	//imshow("greens", greens);
 
-	//get quadrilaterals
-	vector<Quadrilateral> vec;
-	get_points(greens_proc, vec);
-
 	//desenha os pontos
 	Mat frame_proc = frame.clone();
 
+	//get quadrilaterals
+	vector<Quadrilateral> vec;
+
+	get_points(greens_proc, frame_proc, vec);
+
 	vector<Point> cent;
+
 	sort_point(vec, cent);
 	draw_point(frame_proc, vec);
 	draw_point(frame_proc, cent);
@@ -356,10 +365,10 @@ void draw_point ( Mat& frame, vector<Quadrilateral>& vec ){
 	}
 }
 
-void 	draw_point ( Mat& img, vector<Point>& vec){
+void 	draw_point ( Mat& img, vector<Point>& vec, Scalar s ){
 	for(size_t i=0; i<vec.size(); i++){
 		for (size_t j=0; j< 4 ; j++){
-			circle(img, vec[i], 4, Scalar(255, 0, 255), 2);
+			circle(img, vec[i], 4, s, 2);
 		}
 	}
 
@@ -383,39 +392,83 @@ size_t get_rect_area(Quadrilateral q){
 	return (max_x-min_x)*(max_y-min_y);
 }
 
-void get_points (const Mat& img, vector<Quadrilateral>& vec){
-	//acha contornos
-	vector<vector<Point> > contours0;
-	vector<vector<Point> > contours;
-	vector<Vec4i> hierarchy;
-	findContours( img, contours0, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
+// calculate points
+void RDP_points ( vector <Point>& curve, vector <float>& points, int a=0, int b=0 ){
 
-	int ini = 1, end = 500;
-	if((episilon_test(ini, contours, contours0) != 0) &&
-	   (episilon_test(end, contours, contours0) != 0)){
+	//se for a primeira iteração...
+	if(!b) b = curve.size();
 
-		int episilon=(ini+end)/2;
-		int r;
-		while((r = episilon_test(episilon, contours, contours0) != 0) && (ini < end)){
-			if(r < 0)
-				ini = episilon;
-			else if(r > 0)
-				end = episilon;
+	LineSegment2d line (curve[a], curve[b]);
+
+	float 	max_dist = 0;
+	int 	max_index = 0;
+	for ( int i=a; i<=b; i++ ){
+		if( (i != a) && (i != b) ){
+			float d = line.shortestDistanceTo( curve[i] );
 			
-			episilon = (ini+end)/2;
+			if( d > max_dist ){
+				max_dist = d;
+				max_index = i;
+			}
 		}
-
 	}
 
-	for(size_t i = 0; i<contours.size(); i++){
-		if(contours[i].size() == 4){
-			Quadrilateral q;
-			for(size_t j=0; j<4; j++){
-				q[j] = contours[i][j];
-			}
+	points[max_index] = max_dist;
 
-			if(get_rect_area(q) > MIN_RECT_AREA)
-				vec.push_back(q);
+	if( b-a <= 3 ) return;
+
+	RDP_points ( curve, points, a, max_index );
+	RDP_points ( curve, points, max_index, b );
+	
+}
+
+typedef struct cord_score {
+	float score;
+	Point p;
+} cord_score;
+
+bool cord_score_comp ( cord_score c0, cord_score c1 ){
+	return c0.score < c1.score;
+}
+
+void approxQuadrilateral ( vector<Point>& curve, Quadrilateral& q ){
+	if( curve.size() < 4 ) return;
+
+	vector<float> score(curve.size());
+	RDP_points ( curve, score );
+
+	vector<cord_score> cord_and_score;
+
+	for ( size_t i=0; i<curve.size(); i++ ){
+		cord_score cs = { score[i], curve[i] };
+		cord_and_score.push_back( cs );
+	}
+
+	std::sort ( cord_and_score.rbegin(), cord_and_score.rend(), cord_score_comp );
+
+	q[0] = cord_and_score[0].p;
+	q[1] = cord_and_score[1].p;
+	q[2] = cord_and_score[2].p;
+	q[3] = cord_and_score[3].p;
+	
+}
+
+void get_points (Mat& img, Mat& frame, vector<Quadrilateral>& quadrilateral){
+	vector<vector<Point> > contours0;
+	vector<Vec4i> hierarchy;
+
+	findContours(img, contours0, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
+
+	for( size_t i=0; i< contours0.size(); i++ ){
+		Scalar s( (i*10)%255, (i*5)%255, (i*3)%255 );
+		//draw_point( frame, contours0[i], s );
+
+		if ( contours0[i].size() >= 4 ){
+			Quadrilateral q;
+
+			approxQuadrilateral ( contours0[i], q );
+			
+			quadrilateral.push_back ( q );
 		}
 	}
 }

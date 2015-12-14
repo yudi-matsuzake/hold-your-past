@@ -30,8 +30,11 @@
 # vim
 *.swp
 *~
+.vim/
 
 # folders
 bin/
 build/
 img/
+
+.ycm_extra_conf.py*
