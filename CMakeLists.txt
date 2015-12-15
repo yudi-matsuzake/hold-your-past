@@ -4,7 +4,10 @@
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # c++ flags
-set ( CMAKE_CXX_FLAGS "-O3 -Wall -Wextra" )
+set ( GCC_FLAGS "-O3 -Wall -Wextra" )
+set ( DEBUG_FLAGS "-DNDEBUG=3 -DDEBUG_COLOR_ENABLE -DDEBUG_PREFIX_ENABLE" )
+set ( CMAKE_CXX_FLAGS  ${GCC_FLAGS} )
+set ( CMAKE_CXX_FLAGS_DEBUG "${GCC_FLAGS} ${DEBUG_FLAGS}" )
 
 # version and project
 cmake_minimum_required(VERSION 3.0)
