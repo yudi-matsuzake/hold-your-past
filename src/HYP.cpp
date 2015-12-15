@@ -8,10 +8,10 @@
 //--MACROS----------------------------------------------------
 #define BGREEN_MIN_SAT 		60 //60
 #define BGREEN_HUE 		60 //60	
-#define BGREEN_MAX_DISTANCE 	15 //15
+#define BGREEN_MAX_DISTANCE 	25 //15
 #define BGREEN_MIN_BRIGHT 	25 //25
 #define BGREEN_THRESHOLD 	200 //200
-#define BGREEN_MEDIAN_BLUR_WIN 	15  //9
+#define BGREEN_MEDIAN_BLUR_WIN 	9  //9
 ///////////////////////////////////
 #define QUADRILATERAL_AREA_THRESHOLD 100
 ///////////////////////////////////
@@ -200,6 +200,43 @@ void approximate_quadrilateral ( vector<Point>& curve, Quadrilateral& q ){
 	
 }
 
+/** @fn void sort_point_based_on_center ( Quadrilateral& q )
+  *
+  * @brief I couldn't find a name such self-explanatory than this.
+  *
+  * @param q Quadrilateral to be sorted.
+  */
+void sort_point_based_on_center ( Quadrilateral& q ){
+
+	// Get center of mass
+	Point2f c (0, 0);
+
+	// The center of the mass is the mean of the points!
+	for( size_t i=0; i<q.size(); i++ ){
+		c.x += q[i].x;
+		c.y += q[i].y;
+	}
+
+	c.x /= q.size();
+	c.y /= q.size();
+
+	// Sort!
+	//  Vectors that will catch top points and bottom points, respectively.
+	std::vector<cv::Point> top, bot;
+
+	for (size_t i = 0; i < q.size(); i++){
+		if (q[i].y < c.y)
+			top.push_back(q[i]);
+		else
+			bot.push_back(q[i]);
+	}
+
+	q[0] = top[0].x > top[1].x ? top[1] : top[0]; // Top left
+	q[1] = top[0].x > top[1].x ? top[0] : top[1]; // Top right
+	q[3] = bot[0].x > bot[1].x ? bot[1] : bot[0]; // Bottom left
+	q[2] = bot[0].x > bot[1].x ? bot[0] : bot[1]; // Bottom right
+}
+
 /** @fn void get_good_quadrilaterals (Mat& img, vector<Quadrilateral>& quadrilateral);
   *
   * @param img 		One chanel image for that we will retrieve the curve of points.
@@ -230,7 +267,11 @@ void get_good_quadrilaterals (Mat& img, vector<Quadrilateral>& quadrilateral){
 			
 			// if the area of quadrilateral is big enouth
 			if ( q.area() > QUADRILATERAL_AREA_THRESHOLD ){
-				// add to the vector
+
+				// "sort" the points based on center
+				sort_point_based_on_center (q);
+
+				// finally add to the vector
 				quadrilateral.push_back ( q );
 			}
 		}
