@@ -1,5 +1,4 @@
 /*
-
 |Simple C++ DEBUG helper|
 ==================
 Author: Gustavo Yudi Bientinezi Matsuzake (Helped by the internet)

@@ -4,25 +4,27 @@
 
 #include <HYP.hpp>
 
-#define WINDOW_TITLE		"Frame original"
-#define WINDOW_TITLE_PROCESSED	"Frame processado"
+//--MACROS----------------------------------------------------
+#define WINDOW_TITLE		"Hold Your Past Input"
+#define WINDOW_TITLE_PROCESSED	"Hold Your Past"
 #define ESC_KEY 27
-
-#define HGREEN 60
-#define MIN_RECT_AREA 2500
-
 #define DEFAULT_OUTPUT "_out"
+
+// DEBUG MACROS
+#define DEBUG_SHOW_INPUT		0
+#define DEBUG_SHOW_CORNERS		1
+#define DEBUG_SHOW_GREEN_BLOB		1
+#define DEBUG_WINDOW_TITLE_GREEN_BLOB 	"GREEN BLOBS"
+///////////////////////////////////////////////////////////////
 
 using namespace std;
 using namespace cv;
 
-
 /*---------------------------------
-  FLAGS E VARIÁVEIS
+  FLAGS AND CONSTRAITS
   ---------------------------------*/
 bool WRITE_CURRENT_FRAME = false;
 string filename;
-
 
 //pipeline
 void pipeline ( Mat& frame ){
@@ -30,6 +32,11 @@ void pipeline ( Mat& frame ){
 
 	// Find the green
 	Mat green_blob = best_green ( frame );
+
+	#if DEBUG_SHOW_GREEN_BLOB
+	imshow ( DEBUG_WINDOW_TITLE_GREEN_BLOB, green_blob );
+	#endif
+	
 
 	// Find ROIS
 	vector< Rect > roi;
@@ -46,53 +53,29 @@ void pipeline ( Mat& frame ){
 		vector<Quadrilateral> quadrilateral;
 		get_good_quadrilaterals ( contours,  quadrilateral );
 
-		draw_point( frame_roi, quadrilateral );
-
 		if( last_frame.data ){
 			// For every quadrilateral, replace the image
 			for ( size_t i=0; i<quadrilateral.size(); i++ )
 				replace_quadrilateral_by_image (
 					frame_roi, last_frame, blob_roi, quadrilateral[i] );
 		}
+
+		#if DEBUG_SHOW_CORNERS
+		draw_point( frame_roi, quadrilateral );
+		#endif
 		
 	}
 
 	last_frame = frame.clone();
 }
-//Mat pipeline( const Mat& frame ){
-//	static Mat last_frame(frame.size(), frame.type());
-//	static Mat quadri_frame(frame.size(), frame.type());
-//	static bool first = true;
-//
-//	DEBUG("Greens", 3);
-//	//acha os verde
-//	//Mat greens = best_green(frame);
-//	Mat greens_proc = greens.clone();
-//	Mat frame_proc = frame.clone();
-//
-//	DEBUG("Get Quadr", 3);
-//	//get quadrilaterals
-//	vector<Quadrilateral> vec;
-//
-//	//get_good_quadrilaterals(greens_proc, vec);
-//
-//	draw_point(frame_proc, vec);
-//
-//	if(!first){
-//		DEBUG("Replace image", 3);
-//		for ( size_t i=0; i<vec.size(); i++){
-//			//replace_quadrilateral_by_image ( frame_proc, last_frame, greens, vec[i] );
-//		}
-//	}
-//	last_frame = frame_proc.clone();
-//	first = false;
-//	return frame_proc;
-//}
 
 //process
 void process_pipeline( Mat& frame ){
 	static int n_output = 0;
+
+	#if DEBUG_SHOW_INPUT
 	imshow ( WINDOW_TITLE, frame );
+	#endif
 	pipeline( frame );
 	imshow ( WINDOW_TITLE_PROCESSED, frame );
 
@@ -107,7 +90,6 @@ void process_pipeline( Mat& frame ){
 	
 }
 
-//saiu do programa?
 bool key_process(){
 	static int wait = 1;
 	int k = waitKey(wait);
@@ -135,7 +117,7 @@ bool key_process(){
 int main( int argc, char* argv[] ){
 	DEBUG("Hello world of debugging, I'm Hold Your Past!", 0);
 
-	//Abre arquivo passado por argumento ou abre a webcam caso nenhum argumento foi dado.
+	// Open a file passed by argument or open the webcam
 	VideoCapture cap;
 
 	if(argc == 2) {
@@ -146,24 +128,35 @@ int main( int argc, char* argv[] ){
 
 	Mat frame;
 
-	//Lê o primeiro frame
+	// Read first frame
 	if( !( cap.isOpened() && cap.read( frame ) && frame.data ) ){
 		cerr << "Erro, não pôde abrir a imagem" << endl;
 		exit( EXIT_FAILURE );
 	}
 
-	//cria janelas
-	namedWindow ( WINDOW_TITLE,		CV_WINDOW_NORMAL );
+	// Window create
+	// Main window
 	namedWindow ( WINDOW_TITLE_PROCESSED,	CV_WINDOW_NORMAL );
 
-	//processa o primeiro frame
+	// Input window
+	#if DEBUG_SHOW_INPUT
+	namedWindow ( WINDOW_TITLE,		CV_WINDOW_NORMAL );
+	#endif
+
+	// Green blob window
+	#if DEBUG_SHOW_GREEN_BLOB
+	namedWindow ( DEBUG_WINDOW_TITLE_GREEN_BLOB, CV_WINDOW_NORMAL );
+	#endif
+
+	// Process the first frame
 	process_pipeline ( frame );
 
-	//enquanto ainda ler frames...
+	// While frames are coming...
 	while( cap.isOpened() && cap.read( frame ) && frame.data && key_process() ){
 		process_pipeline ( frame );
 	}
 	
+	// Wait exit
 	while(key_process());
 	cap.release();
 	destroyAllWindows();
