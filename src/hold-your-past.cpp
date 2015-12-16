@@ -25,49 +25,86 @@ string filename;
 
 
 //pipeline
-Mat pipeline( const Mat& frame ){
-	static Mat last_frame(frame.size(), frame.type());
-	static Mat quadri_frame(frame.size(), frame.type());
-	static bool first = true;
+void pipeline ( Mat& frame ){
+	static Mat last_frame = Mat(frame.size(), frame.type());
 
-	//acha os verde
-	Mat greens = best_green(frame);
-	Mat greens_proc = greens.clone();
-	Mat frame_proc = frame.clone();
+	// Find the green
+	Mat green_blob = best_green ( frame );
 
-	//get quadrilaterals
-	vector<Quadrilateral> vec;
+	// Find ROIS
+	vector< Rect > roi;
+	find_connected_components ( green_blob, roi );
+	extend_and_group_bounding_rects ( roi, green_blob.size() ); 
 
-	get_good_quadrilaterals(greens_proc, vec);
+	// For every ROI
+	for ( size_t i=0; i<roi.size(); i++ ){
+		Mat frame_roi = Mat(frame, roi[i]);
+		Mat blob_roi  = Mat(green_blob, roi[i]);
+		Mat contours  = blob_roi.clone();
 
-	draw_point(frame_proc, vec);
+		// Get good quadrilaterals
+		vector<Quadrilateral> quadrilateral;
+		get_good_quadrilaterals ( contours,  quadrilateral );
 
-	if(!first){
-		for ( size_t i=0; i<vec.size(); i++){
-			replace_quadrilateral_by_image ( frame_proc, last_frame, greens, vec[i] );
+		draw_point( frame_roi, quadrilateral );
+
+		if( last_frame.data ){
+			// For every quadrilateral, replace the image
+			for ( size_t i=0; i<quadrilateral.size(); i++ )
+				replace_quadrilateral_by_image (
+					frame_roi, last_frame, blob_roi, quadrilateral[i] );
 		}
+		
 	}
-	last_frame = frame_proc.clone();
-	first = false;
-	return frame_proc;
+
+	last_frame = frame.clone();
 }
+//Mat pipeline( const Mat& frame ){
+//	static Mat last_frame(frame.size(), frame.type());
+//	static Mat quadri_frame(frame.size(), frame.type());
+//	static bool first = true;
+//
+//	DEBUG("Greens", 3);
+//	//acha os verde
+//	//Mat greens = best_green(frame);
+//	Mat greens_proc = greens.clone();
+//	Mat frame_proc = frame.clone();
+//
+//	DEBUG("Get Quadr", 3);
+//	//get quadrilaterals
+//	vector<Quadrilateral> vec;
+//
+//	//get_good_quadrilaterals(greens_proc, vec);
+//
+//	draw_point(frame_proc, vec);
+//
+//	if(!first){
+//		DEBUG("Replace image", 3);
+//		for ( size_t i=0; i<vec.size(); i++){
+//			//replace_quadrilateral_by_image ( frame_proc, last_frame, greens, vec[i] );
+//		}
+//	}
+//	last_frame = frame_proc.clone();
+//	first = false;
+//	return frame_proc;
+//}
 
 //process
-void process_pipeline( const Mat& frame ){
+void process_pipeline( Mat& frame ){
 	static int n_output = 0;
-	Mat processed_frame = pipeline( frame );
+	imshow ( WINDOW_TITLE, frame );
+	pipeline( frame );
+	imshow ( WINDOW_TITLE_PROCESSED, frame );
 
 	if(WRITE_CURRENT_FRAME){
 		stringstream s;
 		s << filename << DEFAULT_OUTPUT << n_output << ".png";
 
-		imwrite(s.str(), processed_frame);
+		imwrite(s.str(), frame);
 		WRITE_CURRENT_FRAME = false;
 		n_output++;
 	}
 	
-	imshow ( WINDOW_TITLE, frame );
-	imshow ( WINDOW_TITLE_PROCESSED, processed_frame );
 }
 
 //saiu do programa?
@@ -96,6 +133,8 @@ bool key_process(){
 }
 
 int main( int argc, char* argv[] ){
+	DEBUG("Hello world of debugging, I'm Hold Your Past!", 0);
+
 	//Abre arquivo passado por argumento ou abre a webcam caso nenhum argumento foi dado.
 	VideoCapture cap;
 
@@ -128,6 +167,7 @@ int main( int argc, char* argv[] ){
 	while(key_process());
 	cap.release();
 	destroyAllWindows();
+	DEBUG("Bye world of debugging!", 0);
 	return 0;
 }
 

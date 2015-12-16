@@ -63,5 +63,7 @@ void 	draw_point ( cv::Mat& img, std::vector<Quadrilateral>& vec ); //HYP
 void 	draw_point ( cv::Mat& img, std::vector<cv::Point>& vec, cv::Scalar s = cv::Scalar(255,0,255)); //HYP
 void 	mask ( const cv::Mat& src, cv::Mat &dst, const cv::Mat& mask );	//HYP
 void 	replace_quadrilateral_by_image ( cv::Mat& original, cv::Mat& image_to_put, cv::Mat& mask, Quadrilateral &q );
+void 	extend_and_group_bounding_rects (std::vector <cv::Rect>& rects, cv::Size size);
+void 	find_connected_components (cv::Mat& img, std::vector <cv::Rect>& out);
 
 #endif //_HYP_HPP_

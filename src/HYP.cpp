@@ -13,8 +13,11 @@
 #define BGREEN_THRESHOLD 	200 //200
 #define BGREEN_MEDIAN_BLUR_WIN 	9  //9
 ///////////////////////////////////
-#define QUADRILATERAL_AREA_THRESHOLD 100
+#define QUADRILATERAL_AREA_THRESHOLD 500
 ///////////////////////////////////
+#define ROI_MIN_PIXEL 	100
+#define ROI_RECT_MARGIN 5
+//////////////////////////
 
 
 //--NAMESPACES------------------------------------------------
@@ -134,6 +137,7 @@ bool cord_score_comp ( cord_score c0, cord_score c1 ){
   * @param b		Index of the vector of point, just of recursion purpose.
   */
 void RDP_score ( vector <Point>& curve, vector <float>& score, int a=0, int b=0 ){
+	DEBUG("", 3);			
 
 	// If were the first iteration...
 	if(!b) b = curve.size();
@@ -171,6 +175,7 @@ void RDP_score ( vector <Point>& curve, vector <float>& score, int a=0, int b=0 
   *
   */
 void approximate_quadrilateral ( vector<Point>& curve, Quadrilateral& q ){
+	DEBUG("", 3);			
 	// We don't care if the curve is little than 4. Because quadrilateral has 4 points.
 	if( curve.size() < 4 ) return;
 
@@ -251,10 +256,11 @@ void get_good_quadrilaterals (Mat& img, vector<Quadrilateral>& quadrilateral){
 	// dumb vector for the findContours function
 	vector<Vec4i> hierarchy;
 
+	DEBUG("Find contours", 3);
 	// OpenCV function that returns all curves of points to `countors0`
 	findContours(img, contours0, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
 
-	// For every curve of points...
+	DEBUG("For every curve of points...", 3);
 	for( size_t i=0; i< contours0.size(); i++ ){
 
 		// Wether the curve of points have more than 4 points to form the quadrilateral.
@@ -262,16 +268,18 @@ void get_good_quadrilaterals (Mat& img, vector<Quadrilateral>& quadrilateral){
 			// Holds a quadrilateral
 			Quadrilateral q; 
 
-			// get the approximative quadrilateral
+			DEBUG("get the approximative quadrilateral", 4);
 			approximate_quadrilateral ( contours0[i], q );
-			
+
+			DEBUG("Area: ", 4);			
+			DEBUG(q.area(), 5);
 			// if the area of quadrilateral is big enouth
 			if ( q.area() > QUADRILATERAL_AREA_THRESHOLD ){
 
-				// "sort" the points based on center
+				DEBUG("\"sort\" the points based on center", 4);
 				sort_point_based_on_center (q);
 
-				// finally add to the vector
+				DEBUG("finally add to the vector", 4);
 				quadrilateral.push_back ( q );
 			}
 		}
@@ -295,7 +303,7 @@ void 	mask ( const Mat& src, Mat& dst, const Mat& mask){
 
 		for(int j=0; j<src.cols; j++){
 			
-			if(*ptr_mask == 255){
+			if(*ptr_mask == 127){
 				ptr_dst[Color::B] = ptr_src[Color::B];
 				ptr_dst[Color::G] = ptr_src[Color::G];
 				ptr_dst[Color::R] = ptr_src[Color::R];
@@ -336,3 +344,91 @@ void replace_quadrilateral_by_image ( Mat& original, Mat& image_to_put, Mat& _ma
 	mask( replaced_quad, original, _mask );
 
 }
+
+//--ROI management--------------------------------------------
+void find_connected_components (Mat& img, vector <Rect>& out)
+{
+	// Percorre a imagem. Aqui, não dá para usar o nosso truquezinho (você consegue descobrir o motivo?).
+	for (int row = 0; row < img.rows; row++)
+	{
+		unsigned char* ptr = (unsigned char*) img.data + (row * img.step);
+		for (int col = 0; col < img.cols; col++)
+		{
+			if (*ptr == 255) // Encontrou um novo blob!
+			{
+				// Inunda a partir da posição atual. Todos os pixels do mesmo blob são marcados com o valor 127.
+				Rect out_rect;
+				int n_painted = floodFill (img, Point (col, row), Scalar (127), &out_rect);
+
+				// Testezinhos simples...
+				if (n_painted >= ROI_MIN_PIXEL)
+					out.push_back (out_rect); // Todos os testes realizados com sucesso. Guarda o retângulo envolvente deste blob.
+			}
+
+			ptr++;
+		}
+	}
+}
+
+void extend_and_group_bounding_rects (vector <Rect>& rects, Size size)
+{
+	// Estende cada retângulo.
+	for (unsigned int i = 0; i < rects.size (); i++)
+	{
+		rects [i].x -= ROI_RECT_MARGIN;
+		rects [i].y -= ROI_RECT_MARGIN;
+		rects [i].width += ROI_RECT_MARGIN*2;
+		rects [i].height += ROI_RECT_MARGIN*2;
+
+		// Para não sair da imagem...
+		if (rects [i].x < 0)
+		{
+			rects [i].width += rects [i].x;
+			rects [i].x = 0;
+		}
+		if (rects [i].y < 0)
+		{
+			rects [i].height += rects [i].y;
+			rects [i].y = 0;
+		}
+		if (rects [i].x + rects [i].width >= size.width)
+			rects [i].width = size.width - rects [i].x - 1;
+		if (rects [i].y + rects [i].height >= size.height)
+			rects [i].height = size.height - rects [i].y - 1;
+	}
+
+	// Agrupa componentes.
+	vector <Rect> tmp_rects;
+	tmp_rects.assign (rects.begin (), rects.end ()); // Copia todos os retângulos para cá.
+
+	for (unsigned int i = 0; i < tmp_rects.size (); i++)
+	{
+		if (tmp_rects [i].width != 0) // Se este retângulo ainda não foi misturado com outro.
+		{
+			// Procura por outro componente com intersecção com este.
+			Rect out_rect = tmp_rects [i];
+			for (unsigned int j = 0; j < tmp_rects.size (); j++)
+			{
+				if (i == j || tmp_rects [j].width == 0) // Pula, se j for o mesmo Rect ou já tiver sido "engolido".
+					continue;
+
+				Rect intersection = tmp_rects [j] & out_rect; // Podemos usar & para obter a intersecção entre dois Rects.
+				if (intersection.width > 0)
+				{
+					out_rect |= tmp_rects [j]; // Podemos usar | para obter a união de dois Rects.
+					tmp_rects [j].width = 0;
+					j = 0; // Volta tudo!
+				}
+			}
+
+			tmp_rects [i] = out_rect;
+		}
+	}
+
+	// Substitui.
+	rects.clear ();
+	for (unsigned int i = 0; i < tmp_rects.size (); i++)
+		if (tmp_rects [i].width > 0)
+			rects.push_back (tmp_rects [i]);
+}
+
