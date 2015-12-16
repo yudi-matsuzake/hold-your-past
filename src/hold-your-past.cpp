@@ -44,24 +44,9 @@ Mat pipeline( const Mat& frame ){
 
 	if(!first){
 		for ( size_t i=0; i<vec.size(); i++){
-			vector<Point2f> frame_point;
-			vector<Point2f> quadrilateral_point;
-			frame_point.push_back( Point2f(0, 0) );
-			frame_point.push_back( Point2f(frame_proc.cols, 0) );
-			frame_point.push_back( Point2f(frame_proc.cols, frame_proc.rows) );
-			frame_point.push_back( Point2f(0, frame_proc.rows) );
-			
-			for(size_t j=0; j<4; j++)
-				quadrilateral_point.push_back( vec[i][j] );
-
-			
-			Mat transmtx = getPerspectiveTransform( frame_point,  quadrilateral_point);
-
-			warpPerspective( last_frame, quadri_frame, transmtx, frame_proc.size(), INTER_LINEAR, BORDER_REPLICATE);
-			mask( quadri_frame, frame_proc, greens );
+			replace_quadrilateral_by_image ( frame_proc, last_frame, greens, vec[i] );
 		}
 	}
-
 	last_frame = frame_proc.clone();
 	first = false;
 	return frame_proc;
@@ -146,61 +131,6 @@ int main( int argc, char* argv[] ){
 	return 0;
 }
 
-void sortCorners(std::vector<cv::Point>& corners, cv::Point2f center)
-{
-    std::vector<cv::Point2f> top, bot;
-
-    for (size_t i = 0; i < corners.size(); i++)
-    {
-        if (corners[i].y < center.y)
-            top.push_back(corners[i]);
-        else
-            bot.push_back(corners[i]);
-    }
-
-    cv::Point2f tl = top[0].x > top[1].x ? top[1] : top[0];
-    cv::Point2f tr = top[0].x > top[1].x ? top[0] : top[1];
-    cv::Point2f bl = bot[0].x > bot[1].x ? bot[1] : bot[0];
-    cv::Point2f br = bot[0].x > bot[1].x ? bot[0] : bot[1];
-
-    corners.clear();
-    corners.push_back(tl);
-    corners.push_back(tr);
-    corners.push_back(br);
-    corners.push_back(bl);
-}
-
-void sort_point ( vector<Quadrilateral>& vec, vector<Point>& cent){
-
-	for( size_t  i=0; i<vec.size(); i++){
-		//pega centro de massa
-		Point2f c (0, 0);
-
-		for( size_t j=0; j<vec[i].size(); j++ ){
-			c.x += vec[i][j].x;
-			c.y += vec[i][j].y;
-		}
-
-		c.x /= vec[i].size();
-		c.y /= vec[i].size();
-		cent.push_back(c);
-
-		//ordena
-		vector<Point> v;
-		
-		v.push_back(vec[i][0]);	
-		v.push_back(vec[i][1]);	
-		v.push_back(vec[i][2]);	
-		v.push_back(vec[i][3]);	
-		sortCorners ( v, c );
-		
-		vec[i][0] = v[0];
-		vec[i][1] = v[1];
-		vec[i][2] = v[2];
-		vec[i][3] = v[3];
-	}
-}
-
 void draw_point ( Mat& frame, vector<Quadrilateral>& vec ){
 
 	Scalar s[4] = 	{
@@ -227,27 +157,3 @@ void 	draw_point ( Mat& img, vector<Point>& vec, Scalar s ){
 
 }
 
-void 	mask ( const Mat& src, Mat& dst, const Mat& mask){
-	const uchar* ptr_src;
-	uchar* ptr_dst;
-	const uchar* ptr_mask;
-
-	for(int i=0; i<src.rows; i++){
-		ptr_src = src.ptr<uchar>(i);
-		ptr_dst = dst.ptr<uchar>(i);
-		ptr_mask = mask.ptr<uchar>(i);
-
-		for(int j=0; j<src.cols; j++){
-			
-			if(*ptr_mask == 255){
-				ptr_dst[Color::B] = ptr_src[Color::B];
-				ptr_dst[Color::G] = ptr_src[Color::G];
-				ptr_dst[Color::R] = ptr_src[Color::R];
-			}
-
-			ptr_src += src.channels();
-			ptr_dst += dst.channels();
-			ptr_mask += mask.channels();
-		}
-	}
-}

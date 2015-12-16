@@ -277,3 +277,62 @@ void get_good_quadrilaterals (Mat& img, vector<Quadrilateral>& quadrilateral){
 		}
 	}
 }
+
+//--REPLACE_THE_IMAGE---------------------------------------------------------------
+
+/** @fn 	void mask ( const Mat& src, Mat& dst, const Mat& mask)
+  * @brief	Put `src` image in `dst` with `mask` mask.
+  */
+void 	mask ( const Mat& src, Mat& dst, const Mat& mask){
+	const uchar* ptr_src;
+	uchar* ptr_dst;
+	const uchar* ptr_mask;
+
+	for(int i=0; i<src.rows; i++){
+		ptr_src = src.ptr<uchar>(i);
+		ptr_dst = dst.ptr<uchar>(i);
+		ptr_mask = mask.ptr<uchar>(i);
+
+		for(int j=0; j<src.cols; j++){
+			
+			if(*ptr_mask == 255){
+				ptr_dst[Color::B] = ptr_src[Color::B];
+				ptr_dst[Color::G] = ptr_src[Color::G];
+				ptr_dst[Color::R] = ptr_src[Color::R];
+			}
+
+			ptr_src += src.channels();
+			ptr_dst += dst.channels();
+			ptr_mask += mask.channels();
+		}
+	}
+}
+
+/**
+  * @fn 	void replace_quadrilateral_by_image ( Mat& original, Mat& image_to_put, Quadrilateral &q )
+  * @brief 	Replace, in the original image, the quadrilateral q by image_to_put.
+  *
+  * @param original 	The image to be putted in.
+  * @param image_to_put	Image to put.
+  * @param q		The quadrilateral.
+  *
+  */
+void replace_quadrilateral_by_image ( Mat& original, Mat& image_to_put, Mat& _mask, Quadrilateral &q ){
+	vector<Point2f> frame_point;
+	vector<Point2f> quadrilateral_point;
+	frame_point.push_back( Point2f(0, 0) );
+	frame_point.push_back( Point2f(image_to_put.cols, 0) );
+	frame_point.push_back( Point2f(image_to_put.cols, image_to_put.rows) );
+	frame_point.push_back( Point2f(0, image_to_put.rows) );
+
+	for(size_t i=0; i<q.size(); i++)
+		quadrilateral_point.push_back( q[i] );
+
+
+	Mat transmtx = getPerspectiveTransform( frame_point, quadrilateral_point );
+
+	Mat replaced_quad;
+	warpPerspective( image_to_put, replaced_quad, transmtx, original.size(), INTER_LINEAR, BORDER_REPLICATE );
+	mask( replaced_quad, original, _mask );
+
+}

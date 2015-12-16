@@ -61,7 +61,7 @@ cv::Mat	best_green ( const cv::Mat& frame ); //HYP
 void 	get_good_quadrilaterals (cv::Mat& img, std::vector<Quadrilateral>& quadrilateral);
 void 	draw_point ( cv::Mat& img, std::vector<Quadrilateral>& vec ); //HYP
 void 	draw_point ( cv::Mat& img, std::vector<cv::Point>& vec, cv::Scalar s = cv::Scalar(255,0,255)); //HYP
-void 	sort_point ( std::vector<Quadrilateral>& vec, std::vector<cv::Point>& cent ); //HYP
 void 	mask ( const cv::Mat& src, cv::Mat &dst, const cv::Mat& mask );	//HYP
+void 	replace_quadrilateral_by_image ( cv::Mat& original, cv::Mat& image_to_put, cv::Mat& mask, Quadrilateral &q );
 
 #endif //_HYP_HPP_
